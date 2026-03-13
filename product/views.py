@@ -15,6 +15,7 @@ from .serializers import (CategoryListSerializer,
 from rest_framework.generics import ListAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.pagination import PageNumberPagination
 from common.permissions import IsOwner, IsAnonymous, CanEditSomeTime, IsModerator
+from django.core.cache import cache
 class CategoryListAPIView(ListCreateAPIView):
     serializer_class=CategoryListSerializer
     queryset=Category.objects.all()
@@ -24,6 +25,17 @@ class ProductListAPIView(ListCreateAPIView):
     queryset = Product.objects.all()
     pagination_class = PageNumberPagination
     permission_classes = [ IsOwner | IsAnonymous | IsModerator]
+    
+    def get(self, request, *args, **kwargs):
+        cached_data = cache.get("products_list")
+        if cached_data:
+            print("Cached_data SUCCESS, REDIS")
+            return Response(data=cached_data, status=status.HTTP_200_OK)
+        response = super().get(self, request, *args, **kwargs)
+        print("Used Postgres")
+        if response.data.get("total", 0) > 0:
+            cache.set("products_list", response.data, timeout=300)
+        return response
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
@@ -57,6 +69,7 @@ class ProductDetailAPIView(RetrieveUpdateDestroyAPIView):
     queryset = Product.objects.all()
     lookup_field = 'id'
     permission_classes = [ (IsOwner | IsAnonymous | IsModerator), CanEditSomeTime] 
+    
     
 class ReviewDetailAPIView(RetrieveUpdateDestroyAPIView):
     serializer_class=ReviewDetailSerializer

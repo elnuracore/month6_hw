@@ -8,6 +8,7 @@ from drf_yasg.utils import swagger_auto_schema
 from rest_framework.authtoken.models import Token
 from rest_framework_simplejwt.views import TokenObtainPairView
 from users.serializers import CustomTokenObtainPairSerializer
+from django.core.cache import cache
 
 
 class CUstomTokenObtainPairView(TokenObtainPairView):
@@ -25,17 +26,26 @@ class RegisterAPIView(APIView):
         "code": result["code"]
     })
 class ConfirmAPIView(APIView):
-     @swagger_auto_schema(request_body=RegisterSerializer)
-     def post(self, request):
-      serializer = ConfirmSerializer(data=request.data)
-      serializer.is_valid(raise_exception=True)
-      user = serializer.validated_data
-      user.is_active = True
-      user.save()
-      Confirm.objects.get(user=user).delete()
-      token, _ = Token.objects.get_or_create(user=user)
-      return Response({"message": "User confirmed",
-                       "token": token.key})
+    @swagger_auto_schema(request_body=ConfirmSerializer)
+    def post(self, request):
+        serializer = ConfirmSerializer(data=request.data) 
+        serializer.is_valid(raise_exception=True) 
+        user = serializer.validated_data
+        code = request.data["code"]
+        redis_code = cache.get(f"confirm_code_{user.id}")
+        print("REDIS CODE:", cache.get(f"confirm_code_{user.id}"))
+        if not redis_code:
+            return Response({"error": "Code expired or not found"}, status=400)
+        if redis_code != code:
+            return Response({"error": "Invalid code"}, status=400)
+        user.is_active = True
+        user.save()
+        cache.delete(f"confirm_code_{user.id}")
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response({
+            "message": "User confirmed",
+            "token": token.key
+        })
  
 class LoginAPIView(APIView):
      @swagger_auto_schema(request_body=RegisterSerializer)
