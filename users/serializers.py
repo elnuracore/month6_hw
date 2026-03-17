@@ -4,6 +4,7 @@ import random
 from .models import Confirm, CustomUser
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from django.core.cache import cache
 class OAuthCodeSerializer(serializers.Serializer):
     code = serializers.CharField()
 
@@ -21,7 +22,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     phone_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    birthdate = serializers.CharField(required=False, allow_null=True)
+    birthdate = serializers.DateField(required=False, allow_null=True)
     password = serializers.CharField()
 
     def create(self, validated_data):
@@ -34,6 +35,7 @@ class RegisterSerializer(serializers.Serializer):
         user.set_password(validated_data["password"])
         user.save()
         code = str(random.randint(100000, 999999))
+        cache.set(f"confirm_code_{user.id}", code, timeout=300)
         Confirm.objects.create(user=user, code=code)
         return {"user": user, "code": code}
 

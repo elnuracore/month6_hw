@@ -31,19 +31,13 @@ class RegisterAPIView(APIView):
             "message": "User created",
             "code": code
         })
+
 class ConfirmAPIView(APIView):
     @swagger_auto_schema(request_body=ConfirmSerializer)
     def post(self, request):
         serializer = ConfirmSerializer(data=request.data) 
         serializer.is_valid(raise_exception=True) 
         user = serializer.validated_data
-        code = request.data["code"]
-        redis_code = cache.get(f"confirm_code_{user.id}")
-        print("REDIS CODE:", cache.get(f"confirm_code_{user.id}"))
-        if not redis_code:
-            return Response({"error": "Code expired or not found"}, status=400)
-        if redis_code != code:
-            return Response({"error": "Invalid code"}, status=400)
         user.is_active = True
         user.save()
         cache.delete(f"confirm_code_{user.id}")
@@ -54,8 +48,10 @@ class ConfirmAPIView(APIView):
         })
  
 class LoginAPIView(APIView):
-     @swagger_auto_schema(request_body=RegisterSerializer)
+     @swagger_auto_schema(request_body=LoginSerializer)
      def post(self, request):
       serializer = LoginSerializer(data=request.data)
       serializer.is_valid(raise_exception=True)
-      return Response({"message": "Login success"})
+      user = serializer.validated_data
+      token, _ = Token.objects.get_or_create(user=user)
+      return Response({"message": "Login success", "token": token.key})
